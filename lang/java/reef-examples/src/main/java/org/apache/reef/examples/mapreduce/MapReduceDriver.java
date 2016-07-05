@@ -24,8 +24,11 @@ import org.apache.reef.driver.evaluator.AllocatedEvaluator;
 import org.apache.reef.driver.evaluator.EvaluatorRequestor;
 import org.apache.reef.driver.task.TaskConfiguration;
 import org.apache.reef.tang.Configuration;
+import org.apache.reef.tang.JavaConfigurationBuilder;
+import org.apache.reef.tang.Tang;
 import org.apache.reef.tang.annotations.Parameter;
 import org.apache.reef.tang.annotations.Unit;
+import org.apache.reef.tang.exceptions.BindException;
 import org.apache.reef.wake.EventHandler;
 import org.apache.reef.wake.time.event.StartTime;
 
@@ -43,9 +46,17 @@ public final class MapReduceDriver {
 
   private final EvaluatorRequestor requestor;
 
-  private final int nTotalTask = 3;
+  private final Mapper mapper;
+  private final Reducer reducer;
 
+  private final int nTotalTask = 3;
   private int nActiveTask = 0;
+
+  /**
+   * TANG Configuration of the Map and Reduce Task.
+   */
+  private final Configuration contextMapConfig;
+  private final Configuration contextReduceConfig;
 
   /**
    * Job driver constructor - instantiated via TANG.
@@ -54,10 +65,24 @@ public final class MapReduceDriver {
    */
   @Inject
   private MapReduceDriver(
-          final EvaluatorRequestor requestor,
-          @Parameter(MapReduce.MapperNP.class) final Mapper mapper,
-          @Parameter(MapReduce.ReducerNP.class) final Reducer reducer) {
+      final EvaluatorRequestor requestor,
+      @Parameter(MapReduce.MapperNP.class) final Mapper mapper,
+      @Parameter(MapReduce.ReducerNP.class) final Reducer reducer) {
     this.requestor = requestor;
+    this.mapper = mapper;
+    this.reducer = reducer;
+
+    try {
+      final JavaConfigurationBuilder cbMap = Tang.Factory.getTang().newConfigurationBuilder()
+          .bindNamedParameter(MapReduce.MapperNP.class, mapper.getClass());
+      final JavaConfigurationBuilder cbReduce = Tang.Factory.getTang().newConfigurationBuilder()
+          .bindNamedParameter(MapReduce.ReducerNP.class, reducer.getClass());
+      this.contextMapConfig = cbMap.build();
+      this.contextReduceConfig = cbReduce.build();
+    } catch (final BindException ex) {
+      throw new RuntimeException(ex);
+    }
+
     LOG.log(Level.FINE, "Instantiated 'MapReduceDriver'");
   }
 
@@ -81,11 +106,25 @@ public final class MapReduceDriver {
   public final class EvaluatorAllocatedHandler implements EventHandler<AllocatedEvaluator> {
     @Override
     public void onNext(final AllocatedEvaluator allocatedEvaluator) {
-      LOG.log(Level.INFO, "Submitting an id context to AllocatedEvaluator: {0}", allocatedEvaluator);
-      final Configuration contextConfiguration = ContextConfiguration.CONF
-          .set(ContextConfiguration.IDENTIFIER, "MapReduceContext-" + Integer.toString(nActiveTask++))
-          .build();
-      allocatedEvaluator.submitContext(contextConfiguration);
+      try {
+        LOG.log(Level.INFO, "Submitting an id context to AllocatedEvaluator: {0}", allocatedEvaluator);
+        final Configuration contextConfiguration = ContextConfiguration.CONF
+                .set(ContextConfiguration.IDENTIFIER, "MapReduceContext-" + Integer.toString(nActiveTask++))
+                .build();
+
+        if (nActiveTask == 2) {
+          allocatedEvaluator.submitContext(Tang.Factory.getTang()
+                  .newConfigurationBuilder(contextConfiguration, contextMapConfig).build());
+        } else if (nActiveTask == 3) {
+          allocatedEvaluator.submitContext(Tang.Factory.getTang()
+              .newConfigurationBuilder(contextConfiguration, contextReduceConfig).build());
+        } else {
+          allocatedEvaluator.submitContext(contextConfiguration);
+        }
+      } catch (final BindException ex) {
+        throw new RuntimeException(ex);
+      }
+
     }
   }
 
@@ -120,6 +159,7 @@ public final class MapReduceDriver {
             .build();
         activeContext.submitTask(reduceTaskConfiguration);
       }
+      activeContext.close();
     }
   }
 }

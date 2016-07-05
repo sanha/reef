@@ -21,6 +21,7 @@ package org.apache.reef.examples.mapreduce;
 import org.apache.reef.task.Task;
 
 import javax.inject.Inject;
+import java.util.Random;
 
 /**
  * A Source Task of MapReduce application.
@@ -34,6 +35,30 @@ public final class SourceTask implements Task {
   @Override
   public byte[] call(final byte[] memento) {
     System.out.println("Hello, REEF! This is source task");
+    char[] str;
+    for(;;) {
+      try {
+        str = stringGenerator();
+
+        Thread.sleep(1000);
+      } catch(InterruptedException e){
+        System.out.println(e.getMessage());
+        break;
+      }
+    }
     return null;
+  }
+
+  private char[] stringGenerator() {
+    char[] str = new char[10];
+    Random r = new Random();
+    for (int i=0; i < r.nextInt(10) + 1; i++) {
+      if (r.nextInt(2) == 0) {
+        str[i] = (char) (r.nextInt(26) + 'a');
+      } else {
+        str[i] = (char) (r.nextInt(26) + 'A');
+      }
+    }
+    return str;
   }
 }

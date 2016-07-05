@@ -61,36 +61,6 @@ public final class MapReduce {
   }
 
   /**
-   * Mapper implementation.
-   */
-  public static class MapperImpl implements Mapper{
-    @Inject
-    public MapperImpl() {
-      System.out.println("Hello Mapper!");
-    }
-
-    @Override
-    public void map() {
-
-    }
-  }
-
-  /**
-   * Reducer implementation.
-   */
-  public static class ReducerImpl implements Reducer {
-    @Inject
-    public ReducerImpl() {
-      System.out.println("Hello Reducer!");
-    }
-
-    @Override
-    public void reduce() {
-
-    }
-  }
-
-  /**
    * @return the configuration of the runtime
    */
   private static Configuration getRuntimeConfiguration() {
@@ -148,5 +118,33 @@ public final class MapReduce {
    * Empty private constructor to prohibit instantiation of utility class.
    */
   private MapReduce() {
+  }
+
+  /**
+   * Mapper implementation.
+   */
+  public static class MapperImpl implements Mapper{
+    @Inject
+    public MapperImpl() {
+    }
+
+    @Override
+    public void map() {
+      System.out.println("Map function is called!!");
+    }
+  }
+
+  /**
+   * Reducer implementation.
+   */
+  public static class ReducerImpl implements Reducer {
+    @Inject
+    public ReducerImpl() {
+    }
+
+    @Override
+    public void reduce() {
+      System.out.println("Reduce function is called!!");
+    }
   }
 }
