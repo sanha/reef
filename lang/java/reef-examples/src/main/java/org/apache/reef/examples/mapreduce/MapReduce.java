@@ -108,6 +108,7 @@ public final class MapReduce {
         .set(DriverConfiguration.DRIVER_IDENTIFIER, "MapReduce")
         .set(DriverConfiguration.ON_DRIVER_STARTED, MapReduceDriver.StartHandler.class)
         .set(DriverConfiguration.ON_EVALUATOR_ALLOCATED, MapReduceDriver.EvaluatorAllocatedHandler.class)
+        .set(DriverConfiguration.ON_CONTEXT_ACTIVE, MapReduceDriver.ContextActiveHandler.class)
         .build();
   }
 

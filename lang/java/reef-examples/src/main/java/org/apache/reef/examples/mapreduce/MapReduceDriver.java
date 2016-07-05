@@ -18,6 +18,8 @@
  */
 package org.apache.reef.examples.mapreduce;
 
+import org.apache.reef.driver.context.ActiveContext;
+import org.apache.reef.driver.context.ContextConfiguration;
 import org.apache.reef.driver.evaluator.AllocatedEvaluator;
 import org.apache.reef.driver.evaluator.EvaluatorRequestor;
 import org.apache.reef.driver.task.TaskConfiguration;
@@ -41,6 +43,10 @@ public final class MapReduceDriver {
 
   private final EvaluatorRequestor requestor;
 
+  private final int nTotalTask = 3;
+
+  private int nActiveTask = 0;
+
   /**
    * Job driver constructor - instantiated via TANG.
    *
@@ -48,9 +54,9 @@ public final class MapReduceDriver {
    */
   @Inject
   private MapReduceDriver(
-      final EvaluatorRequestor requestor,
-      @Parameter(MapReduce.MapperNP.class) final Mapper mapper,
-      @Parameter(MapReduce.ReducerNP.class) final Reducer reducer) {
+          final EvaluatorRequestor requestor,
+          @Parameter(MapReduce.MapperNP.class) final Mapper mapper,
+          @Parameter(MapReduce.ReducerNP.class) final Reducer reducer) {
     this.requestor = requestor;
     LOG.log(Level.FINE, "Instantiated 'MapReduceDriver'");
   }
@@ -62,7 +68,7 @@ public final class MapReduceDriver {
     @Override
     public void onNext(final StartTime startTime) {
       MapReduceDriver.this.requestor.newRequest()
-          .setNumber(3)
+          .setNumber(nTotalTask)
           .setMemory(64)
           .submit();
       LOG.log(Level.INFO, "Requested Evaluator.");
@@ -70,32 +76,51 @@ public final class MapReduceDriver {
   }
 
   /**
-   * Handles AllocatedEvaluator: Submit source, map, and reduce tasks.
+   * Handles AllocatedEvaluator: Submit contexts to identify evlauator.
    */
   public final class EvaluatorAllocatedHandler implements EventHandler<AllocatedEvaluator> {
     @Override
     public void onNext(final AllocatedEvaluator allocatedEvaluator) {
-      LOG.log(Level.INFO, "Evaluator is ready");
-      LOG.log(Level.INFO, "Submitting source task of MapReduce application.");
-      final Configuration sourceTaskConfiguration = TaskConfiguration.CONF
-          .set(TaskConfiguration.IDENTIFIER, "SourceTask")
-          .set(TaskConfiguration.TASK, SourceTask.class)
+      LOG.log(Level.INFO, "Submitting an id context to AllocatedEvaluator: {0}", allocatedEvaluator);
+      final Configuration contextConfiguration = ContextConfiguration.CONF
+          .set(ContextConfiguration.IDENTIFIER, "MapReduceContext-" + Integer.toString(nActiveTask++))
           .build();
-      allocatedEvaluator.submitTask(sourceTaskConfiguration);
+      allocatedEvaluator.submitContext(contextConfiguration);
+    }
+  }
 
-      /*LOG.log(Level.INFO, "Submitting map task of MapReduce application.");
-      final Configuration mapTaskConfiguration = TaskConfiguration.CONF
-          .set(TaskConfiguration.IDENTIFIER, "MapTask")
-          .set(TaskConfiguration.TASK, MapTask.class)
-          .build();
-      allocatedEvaluator.submitTask(mapTaskConfiguration);
+  /**
+   * ActiveContext handler : Submit source, map, and reduce tasks.
+   */
+  public class ContextActiveHandler implements EventHandler<ActiveContext> {
+    @Override
+    public void onNext(final ActiveContext activeContext) {
 
-      LOG.log(Level.INFO, "Submitting reduce task of MapReduce application.");
-      final Configuration reduceTaskConfiguration = TaskConfiguration.CONF
-          .set(TaskConfiguration.IDENTIFIER, "ReduceTask")
-          .set(TaskConfiguration.TASK, ReduceTask.class)
-          .build();
-      allocatedEvaluator.submitTask(reduceTaskConfiguration);*/
+      LOG.log(Level.FINE, "Got active context: {0}", activeContext.getId());
+
+      if (activeContext.getId().equals("MapReduceContext-0")) {
+        LOG.log(Level.INFO, "Submitting source task of MapReduce application.");
+        final Configuration sourceTaskConfiguration = TaskConfiguration.CONF
+            .set(TaskConfiguration.IDENTIFIER, "SourceTask")
+            .set(TaskConfiguration.TASK, SourceTask.class)
+            .build();
+        activeContext.submitTask(sourceTaskConfiguration);
+      } else if (activeContext.getId().equals("MapReduceContext-1")) {
+        LOG.log(Level.INFO, "Submitting map task of MapReduce application.");
+        final Configuration mapTaskConfiguration = TaskConfiguration.CONF
+            .set(TaskConfiguration.IDENTIFIER, "MapTask")
+            .set(TaskConfiguration.TASK, MapTask.class)
+            .build();
+        activeContext.submitTask(mapTaskConfiguration);
+      } else if (activeContext.getId().equals("MapReduceContext-2")) {
+        LOG.log(Level.INFO, "Submitting reduce task of MapReduce application.");
+        final Configuration reduceTaskConfiguration = TaskConfiguration.CONF
+            .set(TaskConfiguration.IDENTIFIER, "ReduceTask")
+            .set(TaskConfiguration.TASK, ReduceTask.class)
+            .build();
+        activeContext.submitTask(reduceTaskConfiguration);
+      }
     }
   }
 }
+
