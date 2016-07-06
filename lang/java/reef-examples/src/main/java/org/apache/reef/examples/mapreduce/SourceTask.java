@@ -36,7 +36,7 @@ public final class SourceTask implements Task {
   public byte[] call(final byte[] memento) {
     System.out.println("Hello, REEF! This is source task");
     char[] str;
-    for(;;) {
+    for(int i=0; i<10; i++) {
       try {
         str = stringGenerator();
 

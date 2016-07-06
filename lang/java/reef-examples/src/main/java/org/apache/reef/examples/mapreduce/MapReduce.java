@@ -79,6 +79,7 @@ public final class MapReduce {
         .set(DriverConfiguration.ON_DRIVER_STARTED, MapReduceDriver.StartHandler.class)
         .set(DriverConfiguration.ON_EVALUATOR_ALLOCATED, MapReduceDriver.EvaluatorAllocatedHandler.class)
         .set(DriverConfiguration.ON_CONTEXT_ACTIVE, MapReduceDriver.ContextActiveHandler.class)
+        .set(DriverConfiguration.ON_TASK_COMPLETED, MapReduceDriver.CompletedTaskHandler.class)
         .build();
   }
 
@@ -123,7 +124,7 @@ public final class MapReduce {
   /**
    * Mapper implementation.
    */
-  public static class MapperImpl implements Mapper{
+  public static class MapperImpl implements Mapper {
     @Inject
     public MapperImpl() {
     }

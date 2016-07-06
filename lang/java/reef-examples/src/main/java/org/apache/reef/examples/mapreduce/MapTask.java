@@ -18,6 +18,7 @@
  */
 package org.apache.reef.examples.mapreduce;
 
+import org.apache.reef.tang.annotations.Parameter;
 import org.apache.reef.task.Task;
 
 import javax.inject.Inject;
@@ -26,14 +27,29 @@ import javax.inject.Inject;
  * A Source Task of MapReduce application.
  */
 public final class MapTask implements Task {
+  private final Mapper mapper;
 
   @Inject
-  private MapTask() {
+  private MapTask(
+      @Parameter(MapReduce.MapperNP.class) final Mapper mapper) {
+    this.mapper = mapper;
   }
 
   @Override
   public byte[] call(final byte[] memento) {
     System.out.println("Hello, REEF! This is map task");
+
+    for(;;) {
+      try {
+        mapper.map();
+
+        Thread.sleep(1000);
+      } catch(InterruptedException e){
+        System.out.println(e.getMessage());
+        break;
+      }
+    }
+
     return null;
   }
 }

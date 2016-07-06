@@ -22,6 +22,7 @@ import org.apache.reef.driver.context.ActiveContext;
 import org.apache.reef.driver.context.ContextConfiguration;
 import org.apache.reef.driver.evaluator.AllocatedEvaluator;
 import org.apache.reef.driver.evaluator.EvaluatorRequestor;
+import org.apache.reef.driver.task.CompletedTask;
 import org.apache.reef.driver.task.TaskConfiguration;
 import org.apache.reef.tang.Configuration;
 import org.apache.reef.tang.JavaConfigurationBuilder;
@@ -33,6 +34,7 @@ import org.apache.reef.wake.EventHandler;
 import org.apache.reef.wake.time.event.StartTime;
 
 import javax.inject.Inject;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
@@ -46,11 +48,11 @@ public final class MapReduceDriver {
 
   private final EvaluatorRequestor requestor;
 
-  private final Mapper mapper;
-  private final Reducer reducer;
-
   private final int nTotalTask = 3;
-  private int nActiveTask = 0;
+
+  private AtomicBoolean sourceRunning = new AtomicBoolean(false);
+  private AtomicBoolean mapRunning = new AtomicBoolean(false);
+  private AtomicBoolean reduceRunning = new AtomicBoolean(false);
 
   /**
    * TANG Configuration of the Map and Reduce Task.
@@ -69,8 +71,6 @@ public final class MapReduceDriver {
       @Parameter(MapReduce.MapperNP.class) final Mapper mapper,
       @Parameter(MapReduce.ReducerNP.class) final Reducer reducer) {
     this.requestor = requestor;
-    this.mapper = mapper;
-    this.reducer = reducer;
 
     try {
       final JavaConfigurationBuilder cbMap = Tang.Factory.getTang().newConfigurationBuilder()
@@ -108,18 +108,32 @@ public final class MapReduceDriver {
     public void onNext(final AllocatedEvaluator allocatedEvaluator) {
       try {
         LOG.log(Level.INFO, "Submitting an id context to AllocatedEvaluator: {0}", allocatedEvaluator);
-        final Configuration contextConfiguration = ContextConfiguration.CONF
-                .set(ContextConfiguration.IDENTIFIER, "MapReduceContext-" + Integer.toString(nActiveTask++))
-                .build();
+        final Configuration contextConfiguration;
 
-        if (nActiveTask == 2) {
+        if (!sourceRunning.get()) {
+          contextConfiguration = ContextConfiguration.CONF
+              .set(ContextConfiguration.IDENTIFIER, "SourceContext")
+              .build();
+          sourceRunning.set(true);
+          allocatedEvaluator.submitContext(contextConfiguration);
+        } else if (!mapRunning.get()) {
+          contextConfiguration = ContextConfiguration.CONF
+              .set(ContextConfiguration.IDENTIFIER, "MapContext")
+              .build();
+          mapRunning.set(true);
           allocatedEvaluator.submitContext(Tang.Factory.getTang()
-                  .newConfigurationBuilder(contextConfiguration, contextMapConfig).build());
-        } else if (nActiveTask == 3) {
+              .newConfigurationBuilder(contextConfiguration, contextMapConfig).build());
+        } else if (!reduceRunning.get()) {
+          contextConfiguration = ContextConfiguration.CONF
+              .set(ContextConfiguration.IDENTIFIER, "ReduceContext")
+              .build();
+          reduceRunning.set(true);
           allocatedEvaluator.submitContext(Tang.Factory.getTang()
               .newConfigurationBuilder(contextConfiguration, contextReduceConfig).build());
+
         } else {
-          allocatedEvaluator.submitContext(contextConfiguration);
+          LOG.log(Level.WARNING, "Three task are running already!");
+          allocatedEvaluator.close();
         }
       } catch (final BindException ex) {
         throw new RuntimeException(ex);
@@ -137,21 +151,21 @@ public final class MapReduceDriver {
 
       LOG.log(Level.FINE, "Got active context: {0}", activeContext.getId());
 
-      if (activeContext.getId().equals("MapReduceContext-0")) {
+      if (activeContext.getId().equals("SourceContext")) {
         LOG.log(Level.INFO, "Submitting source task of MapReduce application.");
         final Configuration sourceTaskConfiguration = TaskConfiguration.CONF
             .set(TaskConfiguration.IDENTIFIER, "SourceTask")
             .set(TaskConfiguration.TASK, SourceTask.class)
             .build();
         activeContext.submitTask(sourceTaskConfiguration);
-      } else if (activeContext.getId().equals("MapReduceContext-1")) {
+      } else if (activeContext.getId().equals("MapContext")) {
         LOG.log(Level.INFO, "Submitting map task of MapReduce application.");
         final Configuration mapTaskConfiguration = TaskConfiguration.CONF
             .set(TaskConfiguration.IDENTIFIER, "MapTask")
             .set(TaskConfiguration.TASK, MapTask.class)
             .build();
         activeContext.submitTask(mapTaskConfiguration);
-      } else if (activeContext.getId().equals("MapReduceContext-2")) {
+      } else if (activeContext.getId().equals("ReduceContext")) {
         LOG.log(Level.INFO, "Submitting reduce task of MapReduce application.");
         final Configuration reduceTaskConfiguration = TaskConfiguration.CONF
             .set(TaskConfiguration.IDENTIFIER, "ReduceTask")
@@ -159,6 +173,19 @@ public final class MapReduceDriver {
             .build();
         activeContext.submitTask(reduceTaskConfiguration);
       }
+    }
+  }
+
+  /**
+   * When a Task completes, the task is marked as finished.
+   * Then, close it's context.
+   */
+  public final class CompletedTaskHandler implements EventHandler<CompletedTask> {
+    @Override
+    public void onNext(final CompletedTask task) {
+      ActiveContext activeContext = task.getActiveContext();
+
+      LOG.log(Level.FINE, "Got completed context: {0}", activeContext.getId());
       activeContext.close();
     }
   }

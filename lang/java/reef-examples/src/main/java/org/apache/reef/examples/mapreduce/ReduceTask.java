@@ -38,7 +38,17 @@ public final class ReduceTask implements Task {
   @Override
   public byte[] call(final byte[] memento) {
     System.out.println("Hello, REEF! This is reduce task");
-    reducer.reduce();
+
+    for(;;) {
+      try {
+        reducer.reduce();
+
+        Thread.sleep(1000);
+      } catch(InterruptedException e){
+        System.out.println(e.getMessage());
+        break;
+      }
+    }
 
     return null;
   }
