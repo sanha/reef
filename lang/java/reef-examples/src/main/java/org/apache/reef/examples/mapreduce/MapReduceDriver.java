@@ -30,7 +30,9 @@ import org.apache.reef.tang.Tang;
 import org.apache.reef.tang.annotations.Parameter;
 import org.apache.reef.tang.annotations.Unit;
 import org.apache.reef.tang.exceptions.BindException;
+import org.apache.reef.tang.exceptions.InjectionException;
 import org.apache.reef.wake.EventHandler;
+import org.apache.reef.wake.IdentifierFactory;
 import org.apache.reef.wake.time.event.StartTime;
 
 import javax.inject.Inject;
@@ -50,6 +52,9 @@ public final class MapReduceDriver {
 
   private final int nTotalTask = 3;
 
+  /**
+   * Atomic booleans indicating a task is running.
+   */
   private AtomicBoolean sourceRunning = new AtomicBoolean(false);
   private AtomicBoolean mapRunning = new AtomicBoolean(false);
   private AtomicBoolean reduceRunning = new AtomicBoolean(false);
@@ -59,24 +64,30 @@ public final class MapReduceDriver {
    */
   private final Configuration contextMapConfig;
   private final Configuration contextReduceConfig;
+  private final Configuration contextDefaultConfig;
 
   /**
    * Job driver constructor - instantiated via TANG.
    *
    * @param requestor evaluator requestor object used to create new evaluator containers.
+   * @param mapper client defined mapper named parameter injected by TANG.
+   * @param reducer client defined reducer named parameter injected by TANG.
    */
   @Inject
-  private MapReduceDriver(
-      final EvaluatorRequestor requestor,
-      @Parameter(MapReduce.MapperNP.class) final Mapper mapper,
-      @Parameter(MapReduce.ReducerNP.class) final Reducer reducer) {
+  private MapReduceDriver(final EvaluatorRequestor requestor,
+                          final IdentifierFactory idf,
+                          @Parameter(MapReduce.MapperNP.class) final Mapper mapper,
+                          @Parameter(MapReduce.ReducerNP.class) final Reducer reducer) throws InjectionException {
     this.requestor = requestor;
 
     try {
+      final JavaConfigurationBuilder cbDefault = Tang.Factory.getTang().newConfigurationBuilder()
+          .bindImplementation(IdentifierFactory.class, idf.getClass());
       final JavaConfigurationBuilder cbMap = Tang.Factory.getTang().newConfigurationBuilder()
           .bindNamedParameter(MapReduce.MapperNP.class, mapper.getClass());
       final JavaConfigurationBuilder cbReduce = Tang.Factory.getTang().newConfigurationBuilder()
           .bindNamedParameter(MapReduce.ReducerNP.class, reducer.getClass());
+      this.contextDefaultConfig = cbDefault.build();
       this.contextMapConfig = cbMap.build();
       this.contextReduceConfig = cbReduce.build();
     } catch (final BindException ex) {
@@ -115,22 +126,22 @@ public final class MapReduceDriver {
               .set(ContextConfiguration.IDENTIFIER, "SourceContext")
               .build();
           sourceRunning.set(true);
-          allocatedEvaluator.submitContext(contextConfiguration);
+          allocatedEvaluator.submitContext(Tang.Factory.getTang()
+              .newConfigurationBuilder(contextConfiguration, contextDefaultConfig).build());
         } else if (!mapRunning.get()) {
           contextConfiguration = ContextConfiguration.CONF
               .set(ContextConfiguration.IDENTIFIER, "MapContext")
               .build();
           mapRunning.set(true);
           allocatedEvaluator.submitContext(Tang.Factory.getTang()
-              .newConfigurationBuilder(contextConfiguration, contextMapConfig).build());
+              .newConfigurationBuilder(contextConfiguration, contextDefaultConfig, contextMapConfig).build());
         } else if (!reduceRunning.get()) {
           contextConfiguration = ContextConfiguration.CONF
               .set(ContextConfiguration.IDENTIFIER, "ReduceContext")
               .build();
           reduceRunning.set(true);
           allocatedEvaluator.submitContext(Tang.Factory.getTang()
-              .newConfigurationBuilder(contextConfiguration, contextReduceConfig).build());
-
+              .newConfigurationBuilder(contextConfiguration, contextDefaultConfig, contextReduceConfig).build());
         } else {
           LOG.log(Level.WARNING, "Three task are running already!");
           allocatedEvaluator.close();

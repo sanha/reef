@@ -21,6 +21,7 @@ package org.apache.reef.examples.mapreduce;
 import org.apache.commons.cli.ParseException;
 import org.apache.reef.client.DriverConfiguration;
 import org.apache.reef.client.DriverLauncher;
+import org.apache.reef.io.network.util.StringIdentifierFactory;
 import org.apache.reef.runtime.local.client.LocalRuntimeConfiguration;
 import org.apache.reef.tang.Configuration;
 import org.apache.reef.tang.Tang;
@@ -29,6 +30,7 @@ import org.apache.reef.tang.annotations.NamedParameter;
 import org.apache.reef.tang.exceptions.BindException;
 import org.apache.reef.tang.exceptions.InjectionException;
 import org.apache.reef.util.EnvironmentUtils;
+import org.apache.reef.wake.IdentifierFactory;
 
 import javax.inject.Inject;
 import java.io.IOException;
@@ -96,6 +98,7 @@ public final class MapReduce {
             .newConfigurationBuilder(getDriverConfiguration())
             .bindNamedParameter(MapperNP.class, MapperImpl.class)
             .bindNamedParameter(ReducerNP.class, ReducerImpl.class)
+            .bindImplementation(IdentifierFactory.class, StringIdentifierFactory.class)
             .build();
 
     DriverLauncher.getLauncher(runtimeConf).run(driverConf);

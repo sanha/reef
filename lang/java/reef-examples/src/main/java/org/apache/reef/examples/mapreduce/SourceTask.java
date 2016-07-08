@@ -18,7 +18,15 @@
  */
 package org.apache.reef.examples.mapreduce;
 
+import org.apache.reef.io.network.NetworkConnectionService;
+import org.apache.reef.tang.Injector;
+import org.apache.reef.tang.Tang;
+import org.apache.reef.tang.exceptions.InjectionException;
 import org.apache.reef.task.Task;
+import org.apache.reef.wake.EventHandler;
+import org.apache.reef.wake.Identifier;
+import org.apache.reef.wake.IdentifierFactory;
+import org.apache.reef.wake.remote.impl.ObjectSerializableCodec;
 
 import javax.inject.Inject;
 import java.util.Random;
@@ -28,8 +36,31 @@ import java.util.Random;
  */
 public final class SourceTask implements Task {
 
+  /**
+   * String codec is used to encode the results to send to the map task.
+   */
+  private static final ObjectSerializableCodec<String> CODEC_STR = new ObjectSerializableCodec<>();
+
+  /**
+   * Network Connection Service for source task.
+   */
+  private NetworkConnectionService sourceNCS;
+
+  private EventHandler eventHandler;
+
   @Inject
-  private SourceTask() {
+  private SourceTask(final IdentifierFactory idf) {
+    try {
+      Identifier factoryId = idf.getNewInstance("SourceMapFactoryId");
+      Identifier localEndId = idf.getNewInstance("SourceNCS");
+      this.eventHandler = null;
+
+      Injector injector = Tang.Factory.getTang().newInjector();
+      this.sourceNCS = injector.getInstance(NetworkConnectionService.class);
+      sourceNCS.registerConnectionFactory(factoryId, CODEC_STR, eventHandler, null, localEndId);
+    } catch(InjectionException e){
+      System.err.println(e.getMessage());
+    }
   }
 
   @Override
@@ -39,10 +70,11 @@ public final class SourceTask implements Task {
     for(int i=0; i<10; i++) {
       try {
         str = stringGenerator();
+        System.out.println(str);
 
         Thread.sleep(1000);
       } catch(InterruptedException e){
-        System.out.println(e.getMessage());
+        System.err.println(e.getMessage());
         break;
       }
     }

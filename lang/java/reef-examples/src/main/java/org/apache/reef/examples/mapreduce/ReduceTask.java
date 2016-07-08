@@ -30,8 +30,7 @@ public final class ReduceTask implements Task {
   private final Reducer reducer;
 
   @Inject
-  private ReduceTask(
-      @Parameter(MapReduce.ReducerNP.class) final Reducer reducer) {
+  private ReduceTask(@Parameter(MapReduce.ReducerNP.class) final Reducer reducer) {
     this.reducer = reducer;
   }
 
@@ -39,13 +38,13 @@ public final class ReduceTask implements Task {
   public byte[] call(final byte[] memento) {
     System.out.println("Hello, REEF! This is reduce task");
 
-    for(;;) {
+    for(int i=0; i<10; i++) {
       try {
         reducer.reduce();
 
         Thread.sleep(1000);
       } catch(InterruptedException e){
-        System.out.println(e.getMessage());
+        System.err.println(e.getMessage());
         break;
       }
     }

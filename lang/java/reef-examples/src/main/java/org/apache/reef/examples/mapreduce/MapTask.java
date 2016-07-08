@@ -30,8 +30,7 @@ public final class MapTask implements Task {
   private final Mapper mapper;
 
   @Inject
-  private MapTask(
-      @Parameter(MapReduce.MapperNP.class) final Mapper mapper) {
+  private MapTask(@Parameter(MapReduce.MapperNP.class) final Mapper mapper) {
     this.mapper = mapper;
   }
 
@@ -39,13 +38,13 @@ public final class MapTask implements Task {
   public byte[] call(final byte[] memento) {
     System.out.println("Hello, REEF! This is map task");
 
-    for(;;) {
+    for(int i=0; i<10; i++) {
       try {
         mapper.map();
 
         Thread.sleep(1000);
       } catch(InterruptedException e){
-        System.out.println(e.getMessage());
+        System.err.println(e.getMessage());
         break;
       }
     }
